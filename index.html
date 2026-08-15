@@ -27,8 +27,8 @@
         .schedule-table th { background-color: #f8fafc; color: #334155; }
         
         .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; color: white; }
-        .available { background-color: #22c55e; } /* أخضر للمتاح */
-        .booked { background-color: #ef4444; }    /* أحمر للمحجوز */
+        .available { background-color: #22c55e; }
+        .booked { background-color: #ef4444; }
         
         .control-panel { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .flex-row { display: flex; gap: 10px; }
@@ -37,7 +37,6 @@
 <body>
 
 <div class="container">
-    <!-- تبويب التنقل -->
     <div class="tabs">
         <button class="tab-btn active" id="btn-patient" onclick="switchTab('patient')">حجز مريض</button>
         <button class="tab-btn" id="btn-doctor" onclick="switchTab('doctor')">لوحة التحكم (الدكتور)</button>
@@ -47,7 +46,6 @@
     <div id="patient-view">
         <h2 id="dayTitle">جدول المواعيد اليومية</h2>
         
-        <!-- جدول الأرقام والمواعيد -->
         <table class="schedule-table">
             <thead>
                 <tr>
@@ -95,7 +93,6 @@
         </div>
 
         <div id="doctorData" class="hidden">
-            <!-- أدوات التحكم بالأيام والأرقام المتاحة -->
             <div class="control-panel">
                 <h3>إعدادات اليوم والمواعيد المتاحة</h3>
                 <div class="form-group">
@@ -116,7 +113,6 @@
                 </div>
             </div>
 
-            <!-- جدول التحكم بالأرقام المتاحة للدكتور -->
             <h3>المواعيد المتاحة حالياً للجدول</h3>
             <table class="schedule-table">
                 <thead>
@@ -131,7 +127,6 @@
 
             <hr style="margin: 25px 0;">
 
-            <!-- سجل المواعيد المحجوزة -->
             <h3>سجل المواعيد المحجوزة</h3>
             <table class="schedule-table">
                 <thead>
@@ -152,10 +147,8 @@
 </div>
 
 <script>
-    // رقم واتساب الدكتور بالصيغة الدولية
     const DOCTOR_PHONE = "9647854777816"; 
 
-    // المواعيد الافتراضية للعيادة
     const DEFAULT_SLOTS = [
         { id: 1, time: "04:00 مساءً" },
         { id: 2, time: "04:30 مساءً" },
@@ -235,6 +228,140 @@
         slots.push({ id: parseInt(id), time: time });
         slots.sort((a, b) => a.id - b.id);
         
+        localStorage.setItem('clinic_slots', JSON.stringify(slots));
+        document.getElementById('newSlotId').value = '';
+        document.getElementById('newSlotTime').value = '';
+        
+        loadDoctorSlots();
+        renderPatientSchedule();
+    }
+
+    function deleteSlot(id) {
+        if(confirm(`هل أنت تأكد من حذف الرقم #${id}؟`)) {
+            let slots = getSlots().filter(s => s.id != id);
+            localStorage.setItem('clinic_slots', JSON.stringify(slots));
+            loadDoctorSlots();
+            renderPatientSchedule();
+        }
+    }
+
+    function loadDoctorSlots() {
+        const slots = getSlots();
+        const tbody = document.getElementById('doctorSlotsTable');
+        tbody.innerHTML = '';
+        
+        slots.forEach(s => {
+            tbody.innerHTML += `<tr>
+                <td><strong>#${s.id}</strong></td>
+                <td>${s.time}</td>
+                <td><button class="btn-red" style="padding: 5px 10px; font-size: 12px; width: auto;" onclick="deleteSlot(${s.id})">حذف</button></td>
+            </tr>`;
+        });
+    }
+
+    function switchTab(tab) {
+        if(tab === 'patient') {
+            document.getElementById('patient-view').classList.remove('hidden');
+            document.getElementById('doctor-view').classList.add('hidden');
+            document.getElementById('btn-patient').classList.add('active');
+            document.getElementById('btn-doctor').classList.remove('active');
+            renderPatientSchedule();
+        } else {
+            document.getElementById('patient-view').classList.add('hidden');
+            document.getElementById('doctor-view').classList.remove('hidden');
+            document.getElementById('btn-doctor').classList.add('active');
+            document.getElementById('btn-patient').classList.remove('active');
+        }
+    }
+
+    document.getElementById('bookingForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const selectedSlotId = document.getElementById('slotSelect').value;
+        if (!selectedSlotId) {
+            alert("يرجى اختيار رقم حجز متاح");
+            return;
+        }
+
+        const slotInfo = getSlots().find(s => s.id == selectedSlotId);
+
+        const data = {
+            slotId: selectedSlotId,
+            time: slotInfo.time,
+            name: document.getElementById('name').value,
+            phone: document.getElementById('phone').value,
+            address: document.getElementById('address').value,
+            notes: document.getElementById('notes').value,
+            date: new Date().toLocaleString('ar-IQ')
+        };
+
+        let bookings = JSON.parse(localStorage.getItem('clinic_bookings') || '[]');
+        bookings.push(data);
+        localStorage.setItem('clinic_bookings', JSON.stringify(bookings));
+
+        renderPatientSchedule();
+
+        // التعديل هنا: استخدام النص المنسق وتشفيره بالكامل لحل مشكلة الرسائل الفارغة
+        const currentDay = localStorage.getItem('clinic_day') || 'اليوم';
+        const rawText = `*طلب حجز موعد جديد*\n\n` +
+            `*اليوم:* ${currentDay}\n` +
+            `*رقم الحجز:* #${data.slotId}\n` +
+            `*الموعد:* ${data.time}\n` +
+            `*الاسم:* ${data.name}\n` +
+            `*الهاتف:* ${data.phone}\n` +
+            `*العنوان:* ${data.address}\n` +
+            `*التفاصيل:* ${data.notes}`;
+
+        const fullUrl = `https://wa.me/${DOCTOR_PHONE}?text=${encodeURIComponent(rawText)}`;
+        window.open(fullUrl, '_blank');
+        
+        document.getElementById('bookingForm').reset();
+    });
+
+    function loginDoctor() {
+        const pass = document.getElementById('docPass').value;
+        if(pass === "123456") { 
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('doctorData').classList.remove('hidden');
+            loadDoctorSlots();
+            loadAppointments();
+        } else {
+            alert("كلمة المرور غير صحيحة!");
+        }
+    }
+
+    function loadAppointments() {
+        const bookings = JSON.parse(localStorage.getItem('clinic_bookings') || '[]');
+        const tbody = document.getElementById('appointmentsTable');
+        tbody.innerHTML = '';
+        if(bookings.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">لا توجد مواعيد محجوزة حالياً</td></tr>';
+            return;
+        }
+        bookings.forEach(b => {
+            tbody.innerHTML += `<tr>
+                <td><strong>#${b.slotId}</strong></td>
+                <td>${b.time}</td>
+                <td>${b.name}</td>
+                <td>${b.phone}</td>
+                <td>${b.notes}</td>
+            </tr>`;
+        });
+    }
+
+    function resetBookings() {
+        if(confirm("هل أنت تأكد من مسح قائمة المواعيد المحجوزة؟")) {
+            localStorage.removeItem('clinic_bookings');
+            loadAppointments();
+            renderPatientSchedule();
+        }
+    }
+
+    initSystem();
+</script>
+</body>
+</html>
+  
         localStorage.setItem('clinic_slots', JSON.stringify(slots));
         document.getElementById('newSlotId').value = '';
         document.getElementById('newSlotTime').value = '';
